@@ -1,0 +1,549 @@
+<!doctype html>
+<!--
+  T-Halow Config — Web Serial configurator for LilyGo T-Halow boards
+  (Taixin TX-AH / HUGE-IC "WNB" firmware).
+
+  Speaks only documented AT commands over the board's USB serial console.
+  Contains no vendor driver code.
+
+  Copyright (C) 2026 Ian Williams
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T-Halow Config</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --fg: #1a1a18; --muted: #6b6b66; --line: #dcdcd6;
+    --card: #ffffff; --accent: #2b6cb0; --ok: #2f7a4d; --warn: #9a6700; --err: #b42318;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17171a; --fg: #e8e8e4; --muted: #9a9a94; --line: #33333a;
+      --card: #1f1f24; --accent: #7aa7d9; --ok: #6cc08b; --warn: #e0b341; --err: #f0776a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 1.5rem 1rem 4rem; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1rem; margin: 0 0 .75rem; letter-spacing: .01em; }
+  .sub { color: var(--muted); margin: 0 0 1.5rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1rem 1.15rem; margin-bottom: 1rem;
+  }
+  button {
+    font: inherit; padding: .45rem .9rem; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--card); color: var(--fg); cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: .2rem; }
+  input, select {
+    font: inherit; width: 100%; padding: .4rem .5rem; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .75rem 1rem; }
+  .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+  .mono, pre, code { font-family: var(--mono); font-size: .85rem; }
+  pre {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+    padding: .6rem .7rem; margin: 0; max-height: 16rem; overflow: auto; white-space: pre-wrap;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+  td { padding: .22rem .5rem .22rem 0; vertical-align: top; }
+  td:first-child { color: var(--muted); width: 9rem; }
+  .note { border-left: 3px solid var(--line); padding: .5rem .75rem; margin: .6rem 0 0; font-size: .87rem; color: var(--muted); }
+  .warn { color: var(--warn); border-left-color: var(--warn); }
+  .err  { color: var(--err);  border-left-color: var(--err); }
+  .ok   { color: var(--ok); }
+  .pill { font-size: .78rem; padding: .1rem .5rem; border-radius: 999px; border: 1px solid var(--line); }
+  #rssiCanvas { width: 100%; height: 60px; display: block; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>T-Halow Config</h1>
+  <p class="sub">Configure a LilyGo T-Halow radio (Taixin TX-AH) over its USB serial console. Nothing is installed; nothing leaves your browser.</p>
+
+  <div id="unsupported" class="card err hide">
+    <strong>Web Serial unavailable.</strong> This page needs Chrome, Edge or Opera on desktop.
+    Firefox and Safari do not implement Web Serial, and it is not available on Android.
+    It also requires a secure context — use <code>https://</code> or <code>http://localhost</code>.
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="connect" class="primary">Connect</button>
+      <button id="disconnect" disabled>Disconnect</button>
+      <span id="connState" class="pill">disconnected</span>
+      <span style="flex:1"></span>
+      <button id="refresh" disabled>Refresh status</button>
+    </div>
+    <p class="note">
+      The P4's console multiplexes the ESP32's own log output with the radio's AT UART, so replies
+      arrive interleaved with noise. Connecting quietens the radio's periodic status dump
+      (<code>AT+SYSDBG=LMAC,0</code>) and resynchronises the console before talking to it.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Status</h2>
+    <table id="statusTable"><tbody><tr><td>—</td><td class="mono">not connected</td></tr></tbody></table>
+    <div class="row" style="margin-top:.8rem">
+      <span class="mono" id="rssiNow">RSSI —</span>
+      <span class="mono" id="linkNow"></span>
+    </div>
+    <canvas id="rssiCanvas" height="60"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Configure</h2>
+    <div class="grid">
+      <div>
+        <label for="role">Role</label>
+        <select id="role"><option value="ap">AP</option><option value="sta" selected>STA</option></select>
+      </div>
+      <div>
+        <label for="ssid">SSID</label>
+        <input id="ssid" value="halowlink" maxlength="32">
+      </div>
+      <div>
+        <label for="region">Region</label>
+        <select id="region">
+          <option value="eu" selected>UK / EU — 863–868 MHz</option>
+          <option value="us">US — 902–928 MHz</option>
+          <option value="au">AU / NZ — 915–928 MHz</option>
+          <option value="none">No check</option>
+        </select>
+      </div>
+      <div>
+        <label for="freq">Centre frequency (×0.1 MHz)</label>
+        <input id="freq" type="number" value="8660" step="10">
+      </div>
+      <div>
+        <label for="bw">Bandwidth (MHz)</label>
+        <select id="bw"><option>1</option><option selected>2</option><option>4</option><option>8</option></select>
+      </div>
+      <div>
+        <label for="txpower">TX power (dBm, 6–20)</label>
+        <input id="txpower" type="number" value="14" min="6" max="20">
+      </div>
+      <div>
+        <label for="psk">PSK (64 hex chars, blank = open)</label>
+        <input id="psk" placeholder="open network" pattern="[0-9a-fA-F]{64}">
+      </div>
+    </div>
+
+    <div id="bandNote" class="note"></div>
+
+    <div class="row" style="margin-top:.9rem">
+      <label style="display:flex;gap:.4rem;align-items:center;margin:0;color:var(--fg)">
+        <input type="checkbox" id="loaddef" checked style="width:auto"> Factory reset first (<code>AT+LOADDEF=1</code>)
+      </label>
+    </div>
+    <p class="note">
+      Leave the factory reset on. Reconfiguring without it frequently leaves the two ends unable to
+      associate, with no error on either side — the stored config is applied inconsistently. It costs
+      about 12 seconds.
+    </p>
+
+    <div class="row" style="margin-top:.9rem">
+      <button id="apply" class="primary" disabled>Apply to this board</button>
+      <button id="factory" disabled>Factory reset only</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Console</h2>
+    <div class="row" style="margin-bottom:.6rem">
+      <input id="rawCmd" class="mono" placeholder="AT+WNBCFG" style="flex:1">
+      <button id="rawSend" disabled>Send</button>
+      <button id="logClear">Clear</button>
+    </div>
+    <pre id="log">Ready.</pre>
+  </div>
+
+  <p class="sub" style="font-size:.82rem">
+    AGPL-3.0-or-later. Speaks only documented AT commands; contains no vendor driver code.
+  </p>
+</main>
+
+<script type="module">
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ---------------------------------------------------------------------------
+// AT transport
+// ---------------------------------------------------------------------------
+
+class AtPort {
+  #port; #reader; #writer; #buf = ""; #dec = new TextDecoder();
+
+  constructor(port) { this.#port = port; }
+
+  static supported() { return typeof navigator !== "undefined" && "serial" in navigator; }
+
+  /** Must be called from a user gesture. */
+  static async request() {
+    // The boards use a CH343 (CDC-ACM, 1a86:55d3) or a CH340 (vendor class,
+    // 1a86:7523). Neither is a HID device, so WebHID cannot see them.
+    const port = await navigator.serial.requestPort({
+      filters: [{ usbVendorId: 0x1a86 }],
+    });
+    return port ? new AtPort(port) : null;
+  }
+
+  async open() {
+    await this.#port.open({ baudRate: 115200, dataBits: 8, stopBits: 1, parity: "none", flowControl: "none" });
+    // Chrome asserts DTR/RTS on open. They are not wired to EN/BOOT on the P4,
+    // but clear them anyway so this page can never reset a board.
+    try { await this.#port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch { /* not all platforms */ }
+    this.#writer = this.#port.writable.getWriter();
+    this.#reader = this.#port.readable.getReader();
+    this.#pump();
+  }
+
+  async #pump() {
+    try {
+      for (;;) {
+        const { value, done } = await this.#reader.read();
+        if (done) break;
+        if (value) this.#buf += this.#dec.decode(value, { stream: true });
+      }
+    } catch { /* closed underneath us */ }
+  }
+
+  async close() {
+    try { await this.#reader?.cancel(); } catch {}
+    try { this.#reader?.releaseLock(); } catch {}
+    try { this.#writer?.releaseLock(); } catch {}
+    try { await this.#port.close(); } catch {}
+  }
+
+  drain() { const b = this.#buf; this.#buf = ""; return b; }
+
+  async writeBytes(bytes) { await this.#writer.write(bytes); }
+  async writeLine(s) { await this.#writer.write(new TextEncoder().encode(s + "\r\n")); }
+
+  /** Read until the line goes quiet for `quietMs`, or `maxMs` elapses. */
+  async collect(quietMs = 250, maxMs = 1500) {
+    const start = performance.now();
+    let last = start, out = "";
+    while (performance.now() - start < maxMs) {
+      await sleep(25);
+      const chunk = this.drain();
+      if (chunk) { out += chunk; last = performance.now(); }
+      else if (out && performance.now() - last > quietMs) break;
+    }
+    return out;
+  }
+
+  async cmd(line, quietMs = 250, maxMs = 1800) {
+    this.drain();
+    await this.writeLine(line);
+    return this.collect(quietMs, maxMs);
+  }
+
+  /**
+   * Recover a console stuck in AT+TXDATA data-mode, or one drowning in debug
+   * output: feed filler bytes to satisfy any pending read, then confirm AT works.
+   */
+  async resync() {
+    for (let i = 0; i < 5; i++) {
+      await this.writeBytes(new Uint8Array(1700).fill(0x55));
+      await sleep(200);
+      this.drain();
+      const r = await this.cmd("AT+MODE", 250, 1200);
+      if (r.includes("+MODE")) return true;
+    }
+    return false;
+  }
+
+  /** Stop the periodic LMAC/WNB status dump so replies are parseable. */
+  async quiet() {
+    await this.cmd("AT+SYSDBG=LMAC,0", 200, 900);
+    await this.cmd("AT+SYSDBG=WNB,0", 200, 900);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Parsing
+// ---------------------------------------------------------------------------
+
+/** Pull `key:value` pairs out of an AT+WNBCFG block. */
+function parseWnbcfg(text) {
+  const out = {};
+  for (const m of text.matchAll(/(\w+)\s*:\s*([^,\r\n]*)/g)) out[m[1]] = m[2].trim();
+  return out;
+}
+
+const REPLY = (text, key) => (text.match(new RegExp(`\\+${key}:\\s*([^\\r\\n]*)`)) || [, ""])[1].trim();
+
+// ---------------------------------------------------------------------------
+// Regulatory checks
+// ---------------------------------------------------------------------------
+
+// Ranges in units of 0.1 MHz, and the usual conducted/ERP ceiling in dBm.
+const REGIONS = {
+  eu:   { name: "UK / EU 863–868 MHz", lo: 8630, hi: 8680, maxDbm: 14 },
+  us:   { name: "US 902–928 MHz",      lo: 9020, hi: 9280, maxDbm: 20 },
+  au:   { name: "AU / NZ 915–928 MHz", lo: 9150, hi: 9280, maxDbm: 20 },
+  none: null,
+};
+
+function checkBand() {
+  const region = REGIONS[$("region").value];
+  const freq = Number($("freq").value);      // 0.1 MHz units
+  const bw = Number($("bw").value);          // MHz
+  const txp = Number($("txpower").value);
+  const el = $("bandNote");
+
+  const halfSpan = bw * 5;                   // MHz/2, in 0.1 MHz units
+  const lo = freq - halfSpan, hi = freq + halfSpan;
+  const problems = [];
+
+  if (region) {
+    if (lo < region.lo || hi > region.hi) {
+      problems.push(
+        `${bw === 8 ? "An" : "A"} ${bw} MHz channel centred on ${(freq / 10).toFixed(1)} MHz spans ` +
+        `${(lo / 10).toFixed(1)}–${(hi / 10).toFixed(1)} MHz, outside ${region.name}.`
+      );
+    }
+    if (txp > region.maxDbm) {
+      problems.push(`${txp} dBm exceeds the ${region.maxDbm} dBm normally permitted in ${region.name}.`);
+    }
+  }
+  if (txp < 6 || txp > 20) problems.push("AT+TXPOWER accepts 6–20 dBm.");
+
+  el.className = problems.length ? "note warn" : "note";
+  el.textContent = problems.length
+    ? problems.join(" ")
+    : region
+      ? `${bw} MHz on ${(freq / 10).toFixed(1)} MHz spans ${(lo / 10).toFixed(1)}–${(hi / 10).toFixed(1)} MHz — inside ${region.name}.`
+      : "Regulatory check disabled.";
+  return problems.length === 0;
+}
+
+// ---------------------------------------------------------------------------
+// UI
+// ---------------------------------------------------------------------------
+
+let port = null, polling = null, busy = false;
+const rssiHistory = [];
+
+function log(line, cls) {
+  const pre = $("log");
+  const span = document.createElement("span");
+  span.textContent = line + "\n";
+  if (cls) span.className = cls;
+  pre.appendChild(span);
+  pre.scrollTop = pre.scrollHeight;
+}
+
+function setConnected(on) {
+  $("connect").disabled = on;
+  for (const id of ["disconnect", "refresh", "apply", "factory", "rawSend"]) $(id).disabled = !on;
+  $("connState").textContent = on ? "connected" : "disconnected";
+  $("connState").className = on ? "pill ok" : "pill";
+}
+
+function renderStatus(rows) {
+  const tb = $("statusTable").querySelector("tbody");
+  tb.innerHTML = "";
+  for (const [k, v] of rows) {
+    const tr = document.createElement("tr");
+    const a = document.createElement("td"); a.textContent = k;
+    const b = document.createElement("td"); b.className = "mono"; b.textContent = v;
+    tr.append(a, b); tb.appendChild(tr);
+  }
+}
+
+function drawRssi() {
+  const c = $("rssiCanvas");
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d");
+  g.scale(dpr, dpr);
+  g.clearRect(0, 0, w, h);
+  if (rssiHistory.length < 2) return;
+
+  // Map -100..-20 dBm onto the canvas height.
+  const y = (v) => h - ((Math.max(-100, Math.min(-20, v)) + 100) / 80) * h;
+  const step = w / Math.max(1, rssiHistory.length - 1);
+  g.strokeStyle = getComputedStyle(document.body).getPropertyValue("--accent").trim();
+  g.lineWidth = 1.5;
+  g.beginPath();
+  rssiHistory.forEach((v, i) => (i ? g.lineTo(i * step, y(v)) : g.moveTo(0, y(v))));
+  g.stroke();
+}
+
+async function refreshStatus() {
+  if (!port || busy) return;
+  busy = true;
+  try {
+    const ver = await port.cmd("AT+VERSION", 250, 1500);
+    const mode = await port.cmd("AT+MODE", 250, 1200);
+    const cfgText = await port.cmd("AT+WNBCFG", 350, 2500);
+    const cfg = parseWnbcfg(cfgText);
+    renderStatus([
+      ["Firmware", REPLY(ver, "VERSION") || "?"],
+      ["Role", cfg.role || REPLY(mode, "MODE") || "?"],
+      ["SSID", cfg.ssid || "(none)"],
+      ["Channel list", cfg.chan_list || "?"],
+      ["Bandwidth", (cfg.bss_bw ? cfg.bss_bw + " MHz" : "?")],
+      ["Encryption", cfg.encrypt === "0" ? "open" : "on"],
+      ["TX power", (cfg.tx_power ? cfg.tx_power + " dBm" : "?")],
+      ["MAC", cfg.addr || "?"],
+    ]);
+  } finally { busy = false; }
+}
+
+async function pollLink() {
+  if (!port || busy) return;
+  busy = true;
+  try {
+    const cs = await port.cmd("AT+CONN_STATE", 200, 1200);
+    const rs = await port.cmd("AT+RSSI", 200, 1200);
+    const connected = cs.includes("+CONNECTED");
+    $("linkNow").textContent = connected ? "link up" : "link down";
+    $("linkNow").className = "mono " + (connected ? "ok" : "");
+
+    const rssi = Number(REPLY(rs, "RSSI"));
+    if (Number.isFinite(rssi) && rssi !== 0) {
+      $("rssiNow").textContent = `RSSI ${rssi} dBm`;
+      rssiHistory.push(rssi);
+      if (rssiHistory.length > 120) rssiHistory.shift();
+      drawRssi();
+    } else {
+      $("rssiNow").textContent = "RSSI —";
+    }
+  } catch { /* transient */ } finally { busy = false; }
+}
+
+async function runSteps(steps) {
+  for (const s of steps) {
+    const r = await port.cmd(s, 250, 2500);
+    const ok = r.includes("OK");
+    log(`  ${s.padEnd(24)} -> ${ok ? "OK" : r.trim().split("\n")[0] || "(no reply)"}`, ok ? "ok" : "err");
+  }
+}
+
+async function factoryReset() {
+  log("AT+LOADDEF=1 — factory reset, board reboots (~12 s)");
+  await port.cmd("AT+LOADDEF=1", 500, 4000);
+  await sleep(12000);
+  if (!(await port.resync())) throw new Error("no AT response after factory reset");
+  await port.quiet();
+  log("  reset complete", "ok");
+}
+
+// --- wiring -----------------------------------------------------------------
+
+if (!AtPort.supported()) {
+  $("unsupported").classList.remove("hide");
+  $("connect").disabled = true;
+}
+
+for (const id of ["region", "freq", "bw", "txpower"]) $(id).addEventListener("input", checkBand);
+checkBand();
+
+$("connect").addEventListener("click", async () => {
+  try {
+    port = await AtPort.request();
+    if (!port) return;
+    await port.open();
+    log("opened at 115200 8N1; resynchronising…");
+    if (!(await port.resync())) {
+      log("no AT response — wrong port, or the board is not running firmware that bridges its AT UART", "err");
+      await port.close(); port = null;
+      return;
+    }
+    await port.quiet();
+    setConnected(true);
+    log("connected", "ok");
+    await refreshStatus();
+    polling = setInterval(pollLink, 1500);
+  } catch (e) {
+    log("connect failed: " + e.message, "err");
+    port = null;
+  }
+});
+
+$("disconnect").addEventListener("click", async () => {
+  clearInterval(polling); polling = null;
+  await port?.close(); port = null;
+  setConnected(false);
+  log("disconnected");
+});
+
+$("refresh").addEventListener("click", refreshStatus);
+
+$("apply").addEventListener("click", async () => {
+  if (!checkBand() && !confirm("The requested settings fail the regulatory check. Apply anyway?")) return;
+
+  clearInterval(polling); polling = null;
+  $("apply").disabled = true; $("factory").disabled = true;
+  try {
+    if ($("loaddef").checked) await factoryReset();
+
+    const psk = $("psk").value.trim();
+    const steps = [
+      `AT+MODE=${$("role").value}`,
+      `AT+SSID=${$("ssid").value}`,
+      ...(psk ? ["AT+KEYMGMT=WPA-PSK", `AT+PSK=${psk}`] : ["AT+KEYMGMT=NONE"]),
+      `AT+CHAN_LIST=${$("freq").value}`,
+      `AT+BSS_BW=${$("bw").value}`,
+      `AT+TXPOWER=${$("txpower").value}`,
+    ];
+    log(`applying ${steps.length} settings…`);
+    await runSteps(steps);
+    log("done — give it a few seconds, then watch the link state above", "ok");
+    await refreshStatus();
+  } catch (e) {
+    log("apply failed: " + e.message, "err");
+  } finally {
+    $("apply").disabled = false; $("factory").disabled = false;
+    polling = setInterval(pollLink, 1500);
+  }
+});
+
+$("factory").addEventListener("click", async () => {
+  if (!confirm("Restore factory defaults? The board reboots to role=sta with no SSID.")) return;
+  clearInterval(polling); polling = null;
+  $("apply").disabled = true; $("factory").disabled = true;
+  try { await factoryReset(); await refreshStatus(); }
+  catch (e) { log("factory reset failed: " + e.message, "err"); }
+  finally {
+    $("apply").disabled = false; $("factory").disabled = false;
+    polling = setInterval(pollLink, 1500);
+  }
+});
+
+$("rawSend").addEventListener("click", async () => {
+  const c = $("rawCmd").value.trim();
+  if (!c || busy) return;
+  busy = true;
+  try {
+    log("> " + c);
+    log((await port.cmd(c, 300, 3000)).trimEnd() || "(no reply)");
+  } finally { busy = false; }
+});
+$("rawCmd").addEventListener("keydown", (e) => { if (e.key === "Enter") $("rawSend").click(); });
+$("logClear").addEventListener("click", () => ($("log").textContent = ""));
+
+window.addEventListener("resize", drawRssi);
+</script>
+</body>
+</html>
