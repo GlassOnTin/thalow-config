@@ -1,5 +1,7 @@
 # T-Halow Config
 
+**→ [glassontin.github.io/thalow-config](https://glassontin.github.io/thalow-config/)**
+
 A browser-based configurator for LilyGo **T-Halow** boards (Taixin TX-AH / HUGE-IC "WNB"
 firmware). It speaks the documented AT command set over the board's USB serial console, so it
 needs no drivers, no Python, and no install — just Chrome and a USB cable.
