@@ -66,10 +66,46 @@ the radio's AT UART, so replies always arrive interleaved with firmware logs.
 board — that remains a manual BOOT+RST affair. The page explicitly clears both signals on open so
 it can never reset a board that *does* wire them.
 
-## Related
+## Languages
 
-- [`Xinyuan-LilyGO/T-Halow-P4`](https://github.com/Xinyuan-LilyGO/T-Halow-P4) — the board.
-- `thalow_config.py` — the CLI this is a port of.
+English, 简体中文, 日本語, Deutsch, Français, Español. The language is picked from
+`navigator.languages` on first load and remembered thereafter; the selector is top-right.
+
+English and 简体中文 were written by hand. The other four are best-effort — **corrections are very
+welcome**, and are a one-line change: every string lives in the `STRINGS` table at the top of the
+`<script>` block in `index.html`, and all languages carry the same 73 keys. Right-to-left languages
+are not supported; the layout has no `dir="rtl"` path.
+
+## Documentation
+
+### The boards
+
+- [`Xinyuan-LilyGO/T-Halow-P4`](https://github.com/Xinyuan-LilyGO/T-Halow-P4) — ESP32-P4 + HaLow board.
+- [`Xinyuan-LilyGO/T-Halow`](https://github.com/Xinyuan-LilyGO/T-Halow) — the original RJ45 boards.
+- [T-Halow P4 product page](https://lilygo.cc/products/t-halow-p4) — sold in 868, 915 and 920 MHz variants.
+
+### The AT command set
+
+- [`doc/AT_cmd.md`](https://github.com/Xinyuan-LilyGO/T-Halow-P4/blob/master/doc/AT_cmd.md) — the
+  commands this tool sends. Note that `AT+LOADDEF`, `AT+TXPOWER` and `AT+SYSDBG` are documented
+  only sparsely, and the ordering constraints are not documented at all.
+- [`hardware/`](https://github.com/Xinyuan-LilyGO/T-Halow-P4/tree/master/hardware) — schematic, plus
+  the Taixin AT and non-OS driver PDFs.
+- [Taixin Semiconductor](https://www.taixin-semi.com/) — the module vendor (泰芯). The non-OS
+  Wi-Fi driver is linked from the T-Halow-P4 README.
+
+### Related work in these repos
+
+- [T-Halow-P4 PR #4](https://github.com/Xinyuan-LilyGO/T-Halow-P4/pull/4) — `esp_netif` driver giving
+  the ESP32-P4 an IP stack over HaLow, and three fixes to the vendor SPI path.
+- [T-Halow-P4 issue #3](https://github.com/Xinyuan-LilyGO/T-Halow-P4/issues/3) — which camera module
+  mates with the board's `J4` connector.
+
+### Web Serial
+
+- [MDN: Web Serial API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API)
+- [Specification](https://wicg.github.io/serial/) (WICG)
+- [Browser support](https://caniuse.com/web-serial) — Chromium desktop only.
 
 ## Licence
 
