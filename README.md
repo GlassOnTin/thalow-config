@@ -109,6 +109,19 @@ are not supported; the layout has no `dir="rtl"` path.
 - [Specification](https://wicg.github.io/serial/) (WICG)
 - [Browser support](https://caniuse.com/web-serial) — Chromium desktop only.
 
+## Also in this repo
+
+- [`cli/thalow_config.py`](cli/) — the scriptable CLI this web app is a port of.
+- [`bench/`](bench/) — scripts to bring the loft ↔ desk HaLow link back to a
+  tested state (`bringup.sh`) and measure it (`measure.sh`), with the
+  reproducibility notes: the board reverts to STA on every power cycle, `eth1`
+  reverts on reboot, and the P4 transmits well below its set power.
+
+The ESP32-P4 firmware that gives IP over HaLow is
+[Xinyuan-LilyGO/T-Halow-P4#4](https://github.com/Xinyuan-LilyGO/T-Halow-P4/pull/4)
+(branch `halow-netif`). The 16 MB factory flash backup is kept outside git at
+`~/Code/thalow-p4/backup/factory_flash_16MB.bin`.
+
 ## Licence
 
 AGPL-3.0-or-later.
