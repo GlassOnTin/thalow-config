@@ -8,6 +8,10 @@ needs no drivers, no Python, and no install — just Chrome and a USB cable.
 
 Contains **no vendor driver code**. Only AT strings.
 
+> **New to the board?** [**docs/t-halow-p4.md**](docs/t-halow-p4.md) is a full bring-up
+> write-up — IP over HaLow, the vendor-driver gotchas, the AT quirks, flashing notes, and a
+> cautionary tale about trusting the module's own RSSI (spoiler: don't).
+
 ## Why Web Serial and not WebHID
 
 The boards are not HID devices:
