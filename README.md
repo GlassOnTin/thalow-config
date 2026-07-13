@@ -115,6 +115,8 @@ are not supported; the layout has no `dir="rtl"` path.
 
 ## Also in this repo
 
+- [`case/`](case/) — a 3D-printable enclosure for the board (YAPP_Box OpenSCAD config,
+  with an SMA bulkhead cut-out for the HaLow antenna).
 - [`cli/thalow_config.py`](cli/) — the scriptable CLI this web app is a port of.
 - [`bench/`](bench/) — scripts to bring the loft ↔ desk HaLow link back to a
   tested state (`bringup.sh`) and measure it (`measure.sh`), with the
