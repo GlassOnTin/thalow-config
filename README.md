@@ -117,6 +117,10 @@ are not supported; the layout has no `dir="rtl"` path.
 
 - [`case/`](case/) — a 3D-printable enclosure for the board (YAPP_Box OpenSCAD config,
   with an SMA bulkhead cut-out for the HaLow antenna).
+- [`docs/camera-pinout.md`](docs/camera-pinout.md) — the `J4` camera-connector pinout mapped
+  against the ESP32-P4-EYE and Raspberry Pi pinouts (why "any 24-pin camera" doesn't fit), plus a
+  [flex-adapter design](docs/camera-adapter.md) that makes the P4-EYE camera range (incl. SC2336)
+  usable on J4.
 - [`cli/thalow_config.py`](cli/) — the scriptable CLI this web app is a port of.
 - [`bench/`](bench/) — scripts to bring the loft ↔ desk HaLow link back to a
   tested state (`bringup.sh`) and measure it (`measure.sh`), with the
